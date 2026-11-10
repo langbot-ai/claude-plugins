@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "langbot": {
+      "type": "http",
+      "url": "https://mcp.langbot.ai/mcp"
+    }
+  }
+}

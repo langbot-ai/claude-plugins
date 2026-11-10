@@ -1,0 +1,20 @@
+{
+  "name": "langbot",
+  "owner": {
+    "name": "Langbot",
+    "email": "hello@langbot.ai"
+  },
+  "metadata": {
+    "description": "Langbot for Claude: find a prediction-market strategy, test it on recorded data, run it on paper, then on your own Kalshi account."
+  },
+  "plugins": [
+    {
+      "name": "langbot",
+      "source": "./plugins/langbot",
+      "description": "Find, test and run prediction-market strategies with Langbot: the record of what moved Kalshi and Polymarket, a simulator with real fees, and hosted bots on paper or on your own Kalshi account.",
+      "version": "0.1.0",
+      "category": "finance",
+      "homepage": "https://langbot.ai/docs/claude-plugin"
+    }
+  ]
+}
