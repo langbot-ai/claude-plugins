@@ -1,6 +1,6 @@
 {
   "name": "langbot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Find, test and run prediction-market strategies with Langbot: the record of what moved Kalshi and Polymarket, a simulator with real fees, and hosted bots on paper or on your own Kalshi account.",
   "author": {
     "name": "Langbot",

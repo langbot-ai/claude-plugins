@@ -12,6 +12,7 @@ Then ask Claude "what can I do with Langbot?". The plugin adds:
 - the `langbot` skill: Claude finds a strategy for a topic you follow, tests it on recorded
   markets with Kalshi's fees and realistic delays, explains the results plainly (most ideas lose
   after fees), runs it on paper against live markets, and, when you ask, takes it live on your own
-  Kalshi account through a web page where you connect Kalshi. Keys are never entered in the chat.
+  Kalshi account right from the chat: give it your Kalshi key and a budget; Langbot uses the key
+  once, deletes it on Kalshi and runs the bot on a new trade-only key.
 
 Docs: https://langbot.ai/docs/claude-plugin

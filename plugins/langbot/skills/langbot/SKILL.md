@@ -25,7 +25,10 @@ sentences, then offer one concrete next step. For example:
 > recent events? Tell me a topic you follow (an earnings call, the Fed, a speech, a game), or I can
 > pick one.
 
-Do not lecture about data streams, order books or APIs unless asked. Use the user's words.
+Do not lecture about data streams, order books or APIs unless asked. Use the user's words. The
+`langbot-start` prompt (`langbot://start`) has the three steps for a new user: pick a bot and
+run it on paper, watch it, go live with a Kalshi key given here. Drive that loop yourself: after
+each step, offer the next one.
 
 ## The research loop (do this yourself, without being asked step by step)
 
@@ -56,9 +59,20 @@ Langbot's numbers are measurements, not advice.
 
 ## Paper first (a preview)
 
+Before deploying, call `preflight_bot(strategy, markets, budget_usd, params?)`. It says how many
+open markets the selection matches now, how many pass the strategy's own filters now and over the
+last 7 days, the parameters fit to the budget and to those markets (`effective_params`, each with
+its source: `you`, `budget`, `markets`, `default`), and `expected.trades_per_day` on last week's
+recorded books. If `status` is `blocked`, read `problems` to the user in plain words and apply a
+`suggestions` entry (a parameter and a value, or other markets) before deploying, e.g. "these
+markets close within a day; I'll set min_hours_to_close to 6". Only pass `force=true` when the
+user wants it deployed anyway.
+
 `deploy_bot(strategy, markets, budget_usd, name, params?, limits?, schedule?)` starts a
 **preview**: the strategy trades on paper against live markets with the simulator's fills and
-fees. No money moves.
+fees. No money moves. Leave out parameters the user did not choose: money and contract sizes are
+fit to the budget (a $5 bot gets $5 limits and 1-contract orders) and time-to-close filters to the
+markets. Tell the user the effective values that matter (`deployment.effective_params`).
 
 - `markets` picks what it may trade and keeps picking up markets listed later:
   `{series: ["KXTRUMPSAY"]}` (every market in a series), `{events: [...]}`, `{tickers: [...]}`,
@@ -71,45 +85,88 @@ fees. No money moves.
   switch one off, the user must say so explicitly; then pass `null` in `limits` and the name in
   `confirm_off`, and tell them in one sentence that the bot can then lose its whole budget.
 
-Check on it with `hosted_bot_status` and `hosted_bot_logs`; for several bots `list_hosted_bots`.
-Report paper results as plainly as simulator results, losses included.
+Check on it without being asked twice: `bot_report(bot_id)` is a short plain-text summary to show
+the user (no `bot_id`: every bot and the account's P&L); `hosted_bot_trades` has the fills, orders
+and open positions; `hosted_bot_logs` says what it did and why it stopped; `list_hosted_bots` is the
+whole fleet. Report paper results as plainly as simulator results, losses included.
+
+## The user's own algorithm: `rules`
+
+When no built-in strategy fits the idea, write it as rules: `strategy: "rules"`, `params: {rules:
+[...]}` (at most 20). Langbot checks them and runs them server-side; they are data, never code.
+Each rule:
+
+- `on` (when it is evaluated): `"book"` (every price update, the default), `{"phrase_hit":
+  {counts: true, min_confidence: 0.6, phrase: "tariff", speaker: "powell"}}`, `{"score_change":
+  {team: "NYK", min_points: 3}}`, `{"release": {source: "bls", contains: "payrolls", target:
+  "refs"|"all"}}`, `{"calendar": {lead_min: 30}}` (from 30 minutes before the market's event to
+  its end).
+- `when`: a condition tree, `{"all": [...]}`, `{"any": [...]}`, `{"not": ...}` over comparisons
+  `{"metric", "op" (< <= > >= == !=), "value" (a number or {"metric": ...})}`. Metrics:
+  `yes_bid yes_ask no_bid no_ask mid spread bid_depth ask_depth depth hours_to_close
+  minutes_to_close minutes_to_event event_live position held_yes held_no`, and over `window_s`
+  (≤ 86400): `change` (mid now − then, dollars), `abs_change`, `high`, `low`, `volume`
+  (trade prints: live on Kalshi's stream only; unknown on paper and in replays).
+- `action`: `{side: "yes"|"no", action: "buy"|"sell", price: "1 - yes_bid" (an expression in
+  the side's own price: numbers, the metrics, + − × ÷, min, max, round, abs; null = market),
+  size: {contracts: n} | {usd: x} | {budget_fraction: f}, tif: "ioc"|"gtc"}`.
+- `exit` (closes what the rule opened): `take_profit_c`, `stop_loss_c` (cents per contract),
+  `before_close_min`, `max_hold_min`. Also `once_per_market` (default true), `cooldown_s`,
+  `max_entries`.
+
+Example ("buy No on any market priced 10¢ or less with at least 2 hours left, 20% of the budget
+each, out 30 minutes before the close"):
+
+```json
+{"rules": [{"name": "fade cheap yes",
+  "when": {"all": [{"metric": "yes_ask", "op": "<=", "value": 0.10},
+                   {"metric": "hours_to_close", "op": ">=", "value": 2}]},
+  "action": {"side": "no", "price": "1 - yes_bid", "size": {"budget_fraction": 0.2}},
+  "exit": {"before_close_min": 30}}]}
+```
+
+Workflow: translate the user's idea into rules and read them back in one sentence; test them
+with `sim_run(event_id, "rules", {rules: [...]}, ...)` on recorded events (same loop as above);
+then `preflight_bot` (it replays the last week on recorded books and names any condition that is
+false on every market); then `deploy_bot`. If `deploy_bot` answers a rules error, it names the
+path (`rules[0].when.all[1].metric`): fix that part only.
 
 ## Live, on the user's own Kalshi account (US users)
 
-Only when the user asks to trade real money. Only strategies marked `live: true` in
-`hosted_strategies` can go live (the ones that take liquidity); market-making strategies stay on
-paper for now.
+Only when the user asks to trade real money. Every hosted strategy can go live, market making
+and resting orders included. Everything happens here, in the chat: the user never needs the
+website after the first sign-in.
 
-1. Call `go_live(bot_id)` and give the user its `connect_url`. Explain in one or two sentences:
-   on that page they paste a Kalshi API key and pick a budget (for example $50). Langbot then
-   creates a Kalshi sub-account, moves only that budget into it from their own Kalshi balance,
-   and creates a key that can only trade in that sub-account — so the exchange itself caps the bot
-   at the budget and Langbot can never move money out. The page shows each step before they
-   confirm. Langbot never holds their money or takes deposits.
-2. **Never ask for, accept or repeat an exchange key, private key or password in the chat.** If
-   the user pastes one, tell them not to, that you did not use it, and that they should delete
-   that key in Kalshi and use the page instead.
-3. Poll `live_setup_status(bot_id, wait_s=45, since_status=<last status>)` so the user does not
-   have to come back and explain. Statuses: `waiting_for_key`, `working`, `needs_choice`,
-   `failed`, `connected`, `starting`, `live`, `stopped`.
-   - `needs_choice`: Kalshi only gives sub-accounts to accounts on its Advanced API tier, which
-     needs one of the user's last 100 orders to have been placed through the API. Say so plainly.
-     The page offers the alternative: the bot trades on their main account with a trade-only key,
-     and only Langbot's guardrails cap it (Kalshi does not). That is the user's choice; never
-     suggest placing an order just to qualify.
-4. When the status is `connected`, confirm with the user ("Go live with $50 on Kalshi?"), then
-   `promote_bot(bot_id)`. Name any guardrail that is off.
-5. The kill switch is always `stop_bot(bot_id)` (or `stop_all_bots()`): do it at once when the
-   user says stop. A live stop cancels the bot's resting orders on Kalshi within seconds; open
-   positions stay until they settle or the user closes them in Kalshi.
+1. **Ask for the budget** ("How much should it trade with? For example $20.") and, if they have
+   not given it yet, **their Kalshi API key**: the key id and the private key, or the path to
+   the key file Kalshi downloaded (then read the file and pass its text). If they have no key,
+   tell them where to make one in Kalshi (Account, API keys) and wait.
+2. Call `connect_kalshi(bot_id, key_id, private_key, budget_usd)`, with `go_live=true` when the
+   user already said to go live. Say in one sentence: "I use this key once to make a trade-only
+   key for the bot, and your original key gets deleted on Kalshi." Then read back
+   `tell_the_user`. Defaults: the main account (works on every Kalshi account; the bot's limits
+   enforce the budget), `env="prod"`. `mode="subaccount"` only when the user asks for a Kalshi
+   sub-account holding just the budget (needs Kalshi's Advanced API tier). `keep_original_key=
+   true` only when the user asks to keep their key.
+3. If `connect_kalshi` did not go live, confirm ("Go live with $20 on Kalshi?") and call
+   `promote_bot(bot_id)`. Name any guardrail that is off. Then show `bot_report(bot_id)`.
+4. The kill switch is always `stop_bot(bot_id)`; for everything at once `kill_switch()`: do it at
+   once when the user says stop. A live stop cancels the bot's resting orders on Kalshi within
+   seconds; open positions stay until they settle or the user closes them in Kalshi.
+
+Never repeat the private key back in the chat or put it in a file. If `connect_kalshi` answers
+`scope_denied`, the user signs in to Langbot again from this tool. The web page is an
+alternative, not a requirement: `go_live(bot_id)` returns `connect_url` for a user who would
+rather paste the key there; then poll `live_setup_status(bot_id, wait_s=45, since_status=…)`.
 
 If `promote_bot` answers `live_disabled`, live trading is not open to that account yet: keep the
 bot on paper and say so.
 
 ## Versions, rollbacks and fleets
 
-Every change is a new deployment (an immutable version with its own results). `deploy_bot` with
-`bot_id` makes a new preview; `promote_bot` takes a preview live; `rollback_bot(bot_id,
+Every change is a new deployment (an immutable version with its own results). `update_bot(bot_id,
+budget_usd? params? markets? limits? schedule?)` makes a new preview with only those fields
+changed; `promote_bot` takes a preview live; `rollback_bot(bot_id,
 deployment_id)` runs an earlier version again. Several bots can run at once, each with its own
 guardrails; `set_fleet_limits` adds optional caps across all live bots.
 
