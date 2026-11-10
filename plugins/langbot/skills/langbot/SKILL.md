@@ -30,6 +30,26 @@ Do not lecture about data streams, order books or APIs unless asked. Use the use
 run it on paper, watch it, go live with a Kalshi key given here. Drive that loop yourself: after
 each step, offer the next one.
 
+## The short path: core tools
+
+The tools whose description starts with `[core]` are the short path. Use them first and in this
+order; reach for the rest only when the user asks something they do not answer.
+
+1. Find markets: `search_markets`.
+2. Test on recorded books: `sim_events`, `sim_run` (`sim_run_status` while a run is going).
+3. Check and deploy on paper: `hosted_strategies`, `preflight_bot`, `deploy_bot`.
+4. Watch it: `bot_report`, `hosted_bot_trades` (its orders and fills, in dollars).
+5. Go live, after the user says yes: `connect_kalshi`, `promote_bot(bot_id, confirm=true)`.
+6. Stop: `stop_bot`, or `kill_switch` for every bot at once.
+
+The rest, by group: finding a topic (`list_live_events`, `get_calendar`, `economic_calendar`,
+`official_releases`, `sports_games`, `game_timeline`, `get_market_history`, `market_brief`);
+history and models (`get_base_rates`, `search_outcomes`, `search_mentions`, `list_speakers`,
+`get_calibration`, `get_fair_value`, `get_live_model`, `get_consolidated`); more on a hosted
+bot (`list_hosted_bots`, `hosted_bot_status`, `hosted_bot_logs`, `update_bot`, `rollback_bot`,
+`live_setup_status`, `go_live`, `stop_all_bots`, `set_fleet_limits`); receipts (`get_receipt`,
+`verify_receipts`, `export_replay`, `attest`).
+
 ## The research loop (do this yourself, without being asked step by step)
 
 1. **Pick what to test on.** `sim_events` lists past events whose order books were recorded
@@ -144,12 +164,14 @@ website after the first sign-in.
 2. Call `connect_kalshi(bot_id, key_id, private_key, budget_usd)`, with `go_live=true` when the
    user already said to go live. Say in one sentence: "I use this key once to make a trade-only
    key for the bot, and your original key gets deleted on Kalshi." Then read back
-   `tell_the_user`. Defaults: the main account (works on every Kalshi account; the bot's limits
-   enforce the budget), `env="prod"`. `mode="subaccount"` only when the user asks for a Kalshi
-   sub-account holding just the budget (needs Kalshi's Advanced API tier). `keep_original_key=
-   true` only when the user asks to keep their key.
-3. If `connect_kalshi` did not go live, confirm ("Go live with $20 on Kalshi?") and call
-   `promote_bot(bot_id)`. Name any guardrail that is off. Then show `bot_report(bot_id)`.
+   `tell_the_user`. Defaults: the user's main Kalshi account, the normal path on every Kalshi
+   account (the bot only touches its own orders, and its budget caps what it can spend), and
+   `env="prod"`. `mode="subaccount"` only if the user's Kalshi account has the Advanced API
+   tier and they ask for a sub-account holding just the budget. `keep_original_key=true` only
+   when the user asks to keep their key.
+3. If `connect_kalshi` did not go live, confirm ("Go live with $20 on Kalshi?") and, after the
+   user says yes, call `promote_bot(bot_id, confirm=true)` (without `confirm` nothing goes
+   live). Name any guardrail that is off. Then show `bot_report(bot_id)`.
 4. The kill switch is always `stop_bot(bot_id)`; for everything at once `kill_switch()`: do it at
    once when the user says stop. A live stop cancels the bot's resting orders on Kalshi within
    seconds; open positions stay until they settle or the user closes them in Kalshi.
@@ -166,8 +188,9 @@ bot on paper and say so.
 
 Every change is a new deployment (an immutable version with its own results). `update_bot(bot_id,
 budget_usd? params? markets? limits? schedule?)` makes a new preview with only those fields
-changed; `promote_bot` takes a preview live; `rollback_bot(bot_id,
-deployment_id)` runs an earlier version again. Several bots can run at once, each with its own
+changed; `promote_bot(confirm=true)` takes a preview live; `rollback_bot(bot_id,
+deployment_id)` runs an earlier version again on the target it ran on (a live one needs the
+user's yes and `confirm=true`). Several bots can run at once, each with its own
 guardrails; `set_fleet_limits` adds optional caps across all live bots.
 
 ## Style
