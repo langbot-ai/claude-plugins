@@ -111,6 +111,25 @@ the user (no `bot_id`: every bot and the account's P&L); `hosted_bot_trades` has
 and open positions; `hosted_bot_logs` says what it did and why it stopped; `list_hosted_bots` is the
 whole fleet. Report paper results as plainly as simulator results, losses included.
 
+### Getting paid to keep orders on the book: `lip_harvester`
+
+When the user asks about rewards, rebates or "getting paid to make markets": Kalshi's Liquidity
+Incentive Program pays a daily pool per market ($1 to $1,000) to resting orders near the top of
+the book, until 1 Jan 2027 unless Kalshi ends it sooner. `lip_harvester` collects it: a Yes bid
+and a No bid at each side's reward reference price, on markets where the pool is large next to
+what trades, sized 25/100/300 a side by reward per dollar of collateral, holding at most twice
+its quote size in a market and stopping at 10% of the budget down. `markets` can be `{}` (every
+market with a program: `{incentive: "lip"}`). Say it plainly: "get paid to keep orders on the
+book". In `bot_report`, "Estimated LIP reward" is an estimate from Kalshi's filed formula: a
+paper bot is never paid, and live the reward is Kalshi's to pay (daily, nothing under $1 a
+program). Name the risks once, without dwelling on them: fills can lose money when the seller
+knows more, more competing orders shrink the share, the program can end, and only US members
+without a market-making agreement in that market are paid. `params: {sides: "cheap_only"}` rests
+one bid on the long-shot side of markets priced ≤10¢ or ≥90¢ (much more reward per dollar in
+the research); offer it only if the user asks, and say that Kalshi's filing describes the
+two-sided test as preventing "one-sided order activity", so Kalshi may view it as outside the
+program's purpose and can refuse rewards for it.
+
 ## The user's own algorithm: `rules`
 
 When no built-in strategy fits the idea, write it as rules: `strategy: "rules"`, `params: {rules:
