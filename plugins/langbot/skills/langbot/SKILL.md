@@ -77,7 +77,7 @@ bot (`list_hosted_bots`, `hosted_bot_status`, `hosted_bot_logs`, `update_bot`, `
 Never promise or imply a profit. Past results on recorded markets do not predict future ones.
 Langbot's numbers are measurements, not advice.
 
-## Paper first (a preview)
+## Paper first
 
 Before deploying, call `preflight_bot(strategy, markets, budget_usd, params?)`. It says how many
 open markets the selection matches now, how many pass the strategy's own filters now and over the
@@ -88,8 +88,9 @@ recorded books. If `status` is `blocked`, read `problems` to the user in plain w
 markets close within a day; I'll set min_hours_to_close to 6". Only pass `force=true` when the
 user wants it deployed anyway.
 
-`deploy_bot(strategy, markets, budget_usd, name, params?, limits?, schedule?)` starts a
-**preview**: the strategy trades on paper against live markets with the simulator's fills and
+`deploy_bot(strategy, markets, budget_usd, name, params?, limits?, schedule?)` starts the bot
+**on paper** (the API names this target `preview`; to the user say "on paper", and "go live"
+rather than "promote", the words langbot.ai uses): the strategy trades on paper against live markets with the simulator's fills and
 fees. No money moves. Leave out parameters the user did not choose: money and contract sizes are
 fit to the budget (a $5 bot gets $5 limits and 1-contract orders) and time-to-close filters to the
 markets. Tell the user the effective values that matter (`deployment.effective_params`).
@@ -187,8 +188,8 @@ bot on paper and say so.
 ## Versions, rollbacks and fleets
 
 Every change is a new deployment (an immutable version with its own results). `update_bot(bot_id,
-budget_usd? params? markets? limits? schedule?)` makes a new preview with only those fields
-changed; `promote_bot(confirm=true)` takes a preview live; `rollback_bot(bot_id,
+budget_usd? params? markets? limits? schedule?)` makes a new paper version with only those fields
+changed; `promote_bot(confirm=true)` takes a paper version live; `rollback_bot(bot_id,
 deployment_id)` runs an earlier version again on the target it ran on (a live one needs the
 user's yes and `confirm=true`). Several bots can run at once, each with its own
 guardrails; `set_fleet_limits` adds optional caps across all live bots.
